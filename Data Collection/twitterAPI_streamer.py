@@ -1,161 +1,228 @@
-from TwitterAPI import TwitterAPI
+import tweepy as tw
 import twitter_credentials
 import pandas as pd
+import numpy as np
+from datetime import datetime
 
-# ------------------------------------------ TwitterAuthentication -----------------------------------
-
+# ------------------------------------- Twitter Authentication ---------------------------
 class TwitterAuthentication():
-    """Class to authentice access to twitter API"""
+        
     def authenticate_twitter(self):
-        api = TwitterAPI(
-            consumer_key= twitter_credentials.api_key,
-            consumer_secret= twitter_credentials.api_secret_key,
-            access_token_key= twitter_credentials.access_token,
-            access_token_secret=twitter_credentials.access_token_secret
+        """ A class to connect to twitter API and authenticate """
+        auth = tw.OAuthHandler(
+            consumer_key = twitter_credentials.api_key,
+            consumer_secret= twitter_credentials.api_secret_key
         )
-        return api
+        auth.set_access_token(
+            key = twitter_credentials.access_token,
+            secret = twitter_credentials.access_token_secret
+        )
 
-# ----------------------------------------------- getTweets ------------------------------------------
+        return auth
 
-class getTweets():
-    """Class to retrieve and read + write tweets to csv files"""
+# ---------------------------------------- Get Tweets -----------------------------------
+
+class GetTweets():
+    """ A class to stream and write tweets """
     def __init__(self):
-        auth = TwitterAuthentication()
-
-        # attributes
-        self.api = auth.authenticate_twitter()
-
+        # Instantiate TwitterAuthentication object and authenticate access to twitter
+        
+        auth = TwitterAuthentication().authenticate_twitter()
+        self.api = tw.API(auth)
         self.df_live_tweets = None
         self.df_past_tweets = None
+        self.df_past30_tweets = None
+        self.df_past_compiled = None
+        self.file_name = None
+
+    # Stream live tweets ------------------------------------------------------------------------------
+
+    def stream_live_tweets(self,keyword,num_tweets):
+        """ Method to search live tweets (past 7 days) """
         
+        # Stream live twitter data (past 7 days)
+        tweetsObj = tw.Cursor(
+            self.api.search,
+            q = keyword +'-filter:retweets',    
+        ).items(num_tweets)
 
-    # Stream live tweets --------------------------------------------------------------------------------
+        properties = ['author','contributors','coordinates','created_at','destroy','entities','extended_entities','favorite','favorite_count','favorited','geo','id','id_str','in_reply_to_screen_name','in_reply_to_status_id','in_reply_to_status_id_str','in_reply_to_user_id','in_reply_to_user_id_str','is_quote_status','lang','metadata','parse','parse_list','place','possibly_sensitive','quoted_status','quoted_status_id','quoted_status_id_str','retweet','retweet_count','retweeted','retweets','source','source_url','text','truncated','user']
 
-    def stream_live_tweets(self,keyword):
-        """ Method to retrieve live stream tweets (past 7 days) """
-        
-        # Make a request to the twitter API
-        req = self.api.request(
-            'search/tweets',
-            {
-                'q' : keyword + '-filter:retweets',
-                'lang' : 'en'
-            }
-        )
-
-        # Create dataframe with live tweets
         tweet_list = []
-        for tweet in req:
-            tweet_list.append(
-                {
-                'created_at' : tweet['created_at'],
-                'id' : tweet['id'],
-                'text' : tweet['text'],
-                'favorite_count' : tweet['favorite_count'],
-                'favorited' : tweet['favorited'],
-                'retweet_count' : tweet['retweet_count'],
-                'retweeted' : tweet['retweeted'],
-                'source' : tweet['source'],
-                'user' : tweet['user'],
-                'geo' : tweet['geo'],
-                'coordinates' : tweet['coordinates'],
-                }
-            )
-        self.df_live_tweets = pd.DataFrame(data = tweet_list)
-        self.df_live_tweets.set_index('id',inplace = True)
+        for tweet in tweetsObj:
+            tweet_list.append({key : getattr(tweet,key,None) for key in properties})
 
+        self.df_live_tweets= pd.DataFrame(data = tweet_list)
+        self.df_live_tweets.set_index('id',inplace = True)
+        
         return self.df_live_tweets
 
-    # Stream past tweets -----------------------------------------------------------------------------------
+    # Stream past tweets (30 days) --------------------------------------------------------------------------------
 
-    def stream_past_tweets(self,keyword,search_from,search_to,num_tweets):
-        """ Method to stream past tweets """
+    def stream_past30_tweets(self,keyword,search_from,search_to,max_results = 100,pg = 1, lang = None ,country_code = None):
+        """Streams past 30 data tweets, uses 30 Days / Sandbox Account"""
 
-        # Make request to twitter API
-        self.req = self.api.request(
-            'tweets/search/%s/:%s' % ('fullarchive','VolcanicDisaster'),
-            #'tweets/search/fullarchive/:VolcanicDisaster',
-            {
-                'query': keyword,
-                'fromDate' : search_from,
-                'toDate' : search_to,
-                'maxResults' : num_tweets
-            }
-        )
 
-        # Create a dataframe with past tweets
-        tweet_list = []
-        for tweet in self.req:
-            tweet_list.append(
-                {
-                'created_at' : tweet['created_at'], 
-                'id' : tweet['id'],
-                'id_str' : tweet['id_str'],
-                'text' : tweet['text'],
-                'source' : tweet['source'],
-                'truncated' : tweet['truncated'],
-                'in_reply_to_status_id' : tweet['in_reply_to_status_id'],
-                'in_reply_to_status_id_str' : tweet['in_reply_to_status_id_str'],
-                'in_reply_to_user_id' : tweet['in_reply_to_user_id'],
-                'in_reply_to_user_id_str' : tweet['in_reply_to_user_id_str'],
-                'in_reply_to_screen_name' : tweet['in_reply_to_screen_name'],
-                'user' : tweet['user'],
-                'geo' : tweet['geo'],
-                'coordinates' : tweet['coordinates'],
-                'place' : tweet['place'],
-                'contributors' : tweet['contributors'],
-                #'retweeted_status' : tweet['retweeted_status'],
-                'is_quote_status' : tweet['is_quote_status'],
-                'quote_count' : tweet['quote_count'],
-                'reply_count' : tweet['reply_count'],
-                'retweet_count' : tweet['retweet_count'],
-                'favorite_count' : tweet['favorite_count'],
-                'entities' : tweet['entities'],
-                'favorited' : tweet['favorited'],
-                'retweeted' : tweet['retweeted'],
-                'filter_level' : tweet['filter_level'],
-                'lang' : tweet['lang'],
-                'matching_rules' : tweet['matching_rules']
-                }
-            )
+        if (lang is not None) & (country_code is not None):
+            keyword = keyword + ' lang:' + lang + ' place_country:' + country_code
+        elif (lang is None) & (country_code is not None):
+            keyword = keyword  + ' place_country:' + country_code
+        elif (lang is not None) & (country_code is None):
+            keyword = keyword + ' lang:' + lang 
+        else:
+            keyword = keyword
+
+
+        # Tweepy cursor object
+        past30TweetsObj = tw.Cursor(
+            self.api.search_30_day,
+            environment_name = 'VolcanicDisaster30',
+            query = keyword, 
+            maxResults = max_results,
+            fromDate = search_from,
+            toDate = search_to
+        ).pages(pg)
+        
+        
+        # Create Dataframe
+        properties = ['author','contributors','coordinates','created_at','destroy','display_text_range','entities','extended_entities','extended_tweet','favorite','favorite_count','favorited','filter_level','geo','id','id_str','in_reply_to_screen_name','in_reply_to_status_id','in_reply_to_status_id_str','in_reply_to_user_id','in_reply_to_user_id_str','is_quote_status','lang','matching_rules','parse','parse_list','place','possibly_sensitive','quote_count','quoted_status','quoted_status_id','quoted_status_id_str','quoted_status_permalink','reply_count','retweet','retweet_count','retweeted','retweeted_status','retweets','source','source_url','text','truncated','user']
+        
+        page_list = [pg for pg in past30TweetsObj]
+        tweet_list = [{key : getattr(tweet,key,None) for key in properties} for tweet_collection in page_list for tweet in tweet_collection]
+
+        self.df_past30_tweets = pd.DataFrame(data = tweet_list)
+        self.df_past30_tweets.set_index('id', inplace = True)
+        
+
+        return self.df_past30_tweets
+      
+    # stream past tweets (since 2006) -------------------------------------------------------------------------------
+
+    def stream_past_tweets(self,keyword,search_from,search_to,max_results = 100, pg = 1, lang = None ,country_code = None):
+        """ Method to search for past tweets (since 2006) """
+
+        if (lang is not None) & (country_code is not None):
+            keyword = keyword + ' lang:' + lang + ' place_country:' + country_code
+        elif (lang is None) & (country_code is not None):
+            keyword = keyword  + ' place_country:' + country_code
+        elif (lang is not None) & (country_code is None):
+            keyword = keyword + ' lang:' + lang 
+        else:
+            keyword = keyword
+
+        # Stream past twitter data (since 2006)
+        pastTweetsObj = tw.Cursor(
+            self.api.search_full_archive,
+            environment_name = 'VolcanicDisaster',
+            query = keyword, 
+            maxResults = max_results,
+            fromDate = search_from,
+            toDate = search_to
+        ).pages(pg)
+
+        # create a dataframe with past tweets
+        properties = ['author','contributors','coordinates','created_at','destroy','display_text_range','entities','extended_entities','extended_tweet','favorite','favorite_count','favorited','filter_level','geo','id','id_str','in_reply_to_screen_name','in_reply_to_status_id','in_reply_to_status_id_str','in_reply_to_user_id','in_reply_to_user_id_str','is_quote_status','lang','matching_rules','parse','parse_list','place','possibly_sensitive','quote_count','quoted_status','quoted_status_id','quoted_status_id_str','quoted_status_permalink','reply_count','retweet','retweet_count','retweeted','retweeted_status','retweets','source','source_url','text','truncated','user']
+
+        page_list = [pg for pg in pastTweetsObj]
+        tweet_list = [{key : getattr(tweet,key,None) for key in properties} for tweet_collection in page_list for tweet in tweet_collection]
 
         self.df_past_tweets = pd.DataFrame(data = tweet_list)
         self.df_past_tweets.set_index('id',inplace = True)
-        
 
         return self.df_past_tweets
 
-    # Write data -------------------------------------------------------------------------------------------
+    # Compiled dataframe --------------------------------------------------------------------------------
 
-    def write_to_csv(self):
+    def stream_single_over_dateRange(self,keyword,search_from,search_to,max_results = 100, pg = 1, lang = None, country_code = None, pastSearch30 = True):
+        from datetime import date,timedelta
+        from dateutil.relativedelta import relativedelta
 
-        if self.df_live_tweets is not None:
-            self.df_live_tweets.to_csv('D:/Python/Disaster Sentiment Analysis/live_tweets.csv')
-
-        if self.df_past_tweets is not None:
-            self.df_past_tweets.to_csv('D:/Python/Disaster Sentiment Analysis/past_tweets.csv')
-
-    # Read Data -------------------------------------------------------------------------------------------
-
-    def read_from_csv(self,live = False):
-
-        if live == True:
-            df = pd.read_csv('D:/Python/Disaster Sentiment Analysis/live_tweets.csv', index_col = 'tweet_id')
-            return df
+        # Construct query based on keyword, lang, and country code
+        if (lang is not None) & (country_code is not None):
+            keyword = keyword + ' lang:' + lang + ' place_country:' + country_code
+        elif (lang is None) & (country_code is not None):
+            keyword = keyword  + ' place_country:' + country_code
+        elif (lang is not None) & (country_code is None):
+            keyword = keyword + ' lang:' + lang 
         else:
-            df = pd.read_csv('D:/Python/Disaster Sentiment Analysis/past_tweets.csv', index_col = 'tweet_id')
-            return df
+            keyword = keyword
+
+        # Create a range of dates to iterate over
+        startDate = datetime.strptime(search_from,'%Y%m%d%H%M')
+        endDate = datetime.strptime(search_to,'%Y%m%d%H%M')
+        dateRange = [startDate + timedelta(days = i) for i in range((endDate-startDate).days)]
+        dateRangeStr =[dt.strftime('%Y%m%d%H%M') for dt in dateRange]
+
+        # create a dataframe with past tweets
+        properties = ['author','contributors','coordinates','created_at','destroy','display_text_range','entities','extended_entities','extended_tweet','favorite','favorite_count','favorited','filter_level','geo','id','id_str','in_reply_to_screen_name','in_reply_to_status_id','in_reply_to_status_id_str','in_reply_to_user_id','in_reply_to_user_id_str','is_quote_status','lang','matching_rules','parse','parse_list','place','possibly_sensitive','quote_count','quoted_status','quoted_status_id','quoted_status_id_str','quoted_status_permalink','reply_count','retweet','retweet_count','retweeted','retweeted_status','retweets','source','source_url','text','truncated','user']
+        
+        if pastSearch30 == True:
+            
+            df_list = []
+
+            for dt_idx,dt in enumerate(dateRangeStr):
+                if dt_idx < len(dateRangeStr)-1:
+                    # Tweepy cursor object
+                    df_search30 = self.stream_past30_tweets(keyword = keyword, search_from = dt , search_to = dateRangeStr[dt_idx + 1], pg =pg, lang = lang, country_code = country_code)
+                    df_list.append(df_search30)
+
+            self.df_past_compiled = pd.concat(df_list)
+
+        else:
+
+            df_list = []
+
+            for dt_idx,dt in enumerate(dateRangeStr):
+                if dt_idx < len(dateRangeStr)-1:
+                    # Tweepy cursor object
+                    df_search = self.stream_past_tweets(keyword = keyword, search_from = dt , search_to = dateRangeStr[dt_idx + 1], pg =pg, lang = lang, country_code = country_code)
+                    df_list.append(df_search)
+
+            self.df_past_compiled = pd.concat(df_list)
 
 
+        return self.df_past_compiled
+        
 
-if __name__ == '__main__':
-    inst = getTweets()
+    # write data ----------------------------------------------------------------------------------------
 
-    print(inst.stream_live_tweets(keyword = '#kilauea'))
-    
-"""
-Notes from twitter API
-* maxResults (num_tweets) : passed as a string
-* formDate : passed as a string "YYYYMMDDHHmm"
-* toDate : passed as a string "YYYYMMDDHHmm"
-"""
+    def write_to_csv(self,f_name = None):
+        """Method to write streamed tweets to csv file """
+
+        self.file_name = f_name
+        if self.file_name is not None:
+            path = 'D:/Python/Disaster Sentiment Analysis/Data/'
+            with open(path + self.file_name,'w'):
+                pass
+
+            if self.df_live_tweets is not None:
+                self.df_live_tweets.to_csv(path + self.file_name)
+
+            if self.df_past_tweets is not None:
+                self.df_past_tweets.to_csv(path + self.file_name)
+
+            if self.df_past30_tweets is not None:
+                self.df_past30_tweets.to_csv(path + self.file_name)
+
+            if self.df_past_compiled is not None:
+                self.df_past_compiled.to_csv(path + self.file_name)
+
+        if (self.df_live_tweets is not None) & (self.file_name is None) & (self.df_past_compiled is None) :
+            self.df_live_tweets.to_csv('D:/Python/Disaster Sentiment Analysis/Data/live_tweets.csv')
+
+        if (self.df_past_tweets is not None) & (self.file_name is None) & (self.df_past_compiled is None):
+            self.df_past_tweets.to_csv('D:/Python/Disaster Sentiment Analysis/Data/past_tweets.csv')
+
+        if (self.df_past30_tweets is not None) & (self.file_name is None) & (self.df_past_compiled is None):
+            self.df_past30_tweets.to_csv('D:/Python/Disaster Sentiment Analysis/Data/past30_tweets.csv')
+
+        if (self.df_past_compiled is not None) & (self.file_name is None):
+            self.df_past_compiled.to_csv('D:/Python/Disaster Sentiment Analysis/Data/past_compiled_tweets.csv')
+
+    # read data ----------------------------------------------------------------------------------------
+
+    def read_csv(self,f_name):
+        """ Method to read saved tweets in csv file """
+        path = 'D:/Python/Disaster Sentiment Analysis/Data/'
+        df = pd.read_csv(path + f_name, index_col = 'id')
+        return df
