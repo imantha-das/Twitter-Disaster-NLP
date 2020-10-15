@@ -236,13 +236,3 @@ def plot_word_cloud(lang_val):
 # _________________________________________________________________________________________________________________________________
 
 app.run_server(debug = False)
-
-"""
-Notes :
-mapbox styles : 
-    white-bg
-    "open-street-map", "carto-positron", "carto-darkmatter", "stamen-terrain", "stamen-toner" or "stamen-watercolor"
-    "basic", "streets", "outdoors", "light", "dark", "satellite", or "satellite-streets"
-
-    padding-left/right/bottom/top controls the indentation
-"""
