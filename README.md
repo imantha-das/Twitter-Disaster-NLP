@@ -41,3 +41,11 @@
   * lang : streams only the language requested (Note language must be a two letter code)
   * country_code : Will stream only tweets from requestd country (Note country_code is a two letter code)
  
+### Data Visualization and Exploration
+* DataVis.py : A dashboard created using plotly-dash to visualize twitter data
+* Input:
+  * csv file containing following column names "lang" , "lat" , "lon" , "text"
+    * lang : language
+    * lat : latitude
+    * lon : longitude
+    * text : tweet text
