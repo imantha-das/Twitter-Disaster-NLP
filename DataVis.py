@@ -23,15 +23,11 @@ import pandas as pd
 # ___________________________________________________________________________________________
 
 data = pd.read_csv('D:/Python/Disaster Sentiment Analysis/Data/Taal_concise_0016_0019.csv',index_col = 0)
-selectedCols = ['id','created_at','lang','loc ext','lat ext','lon ext','text']
+selectedCols = ['created_at','lang','lat','lon','text']
 df = data[selectedCols]
 
 # Drop all missing values
 df.dropna(inplace = True)
-
-# Rename column names for locations,lat & lon
-if all(elem in df.columns.values for elem in ['loc ext','lat ext','lon ext']):
-    df.rename(columns = {'loc ext' : 'location', 'lat ext' : 'lat', 'lon ext' : 'lon'},inplace = True)
 
 # Dictionary to replace lang code with lang names
 lang_dic = {'en' : 'english','es' : 'spanish', 'tl' : 'taglog', 'nl' : 'dutch', 'und' : 'undefned', 'fr' : 'french', 'de' : 'german', 'hi' :  'hindi', 'it' : 'italian', 'in' : 'indonesian', 'ja' : 'japanese', 'et' : 'estonian', 'pt' : 'portuguese', 'ru' : 'russian', 'ar' : 'Arabic', 'ca' : 'catalan','zh' : 'chinese', 'lt' : 'lithuanian', 'ht' : 'hatian', 'cy' : 'welsh', 'pl' : 'polish' }
