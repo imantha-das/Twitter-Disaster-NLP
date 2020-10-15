@@ -44,8 +44,9 @@
 ### Data Visualization and Exploration
 * DataVis.py : A dashboard created using plotly-dash to visualize twitter data
 * Input:
-  * csv file containing following column names "lang" , "lat" , "lon" , "text"
+  * csv file containing following column names "lang" , "lat" , "lon" , "text", "created_at"
     * lang : language
     * lat : latitude
     * lon : longitude
     * text : tweet text
+    * created_at : Date the tweets was posted
