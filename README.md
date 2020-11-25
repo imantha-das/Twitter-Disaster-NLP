@@ -1,6 +1,6 @@
 # Sentiment Analysis for Volcanic Disasters
 
-![](Images-Gifs/Dash-App.gif)
+![](Images-Gifs/dash-App4.gif)
 
 ## Overview 
 * credentials.py : Contains credential to access TwitterAPI & Mapbox accounts
